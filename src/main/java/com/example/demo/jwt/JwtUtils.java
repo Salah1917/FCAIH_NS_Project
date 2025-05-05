@@ -1,6 +1,5 @@
 package com.example.demo.jwt;
 
-
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -20,10 +19,10 @@ public class JwtUtils {
     private static final Logger logger = LoggerFactory.getLogger(JwtUtils.class);
 
     @Value("${spring.app.jwtSecret}")
-    private static String jwtSecret = "9h2309hijbio9u08hpkhjepwfioghjokfdbnglslojefpihsefpljkesofijghspfjosiehoshfloihsfbskfbhskhjfvslekhfikhjsgeflkshnefkljhselfjbslefkjlskfhelsjefljkbsfelonsefljsefojlihip4uweprt0iuwp09ruy23p0oihop3iutp093utpio3u093tpioh";
+    private String jwtSecret;
 
     @Value("${spring.app.jwtExpirationMs}")
-    private static int jwtExpirationMs;
+    private int jwtExpirationMs;
 
     public String getJwtFromHeader(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
@@ -34,7 +33,7 @@ public class JwtUtils {
         return null;
     }
 
-    public static String generateTokenFromUsername(UserDetails userDetails) {
+    public String generateTokenFromUsername(UserDetails userDetails) {
         String username = userDetails.getUsername();
         return Jwts.builder()
                 .subject(username)
@@ -51,7 +50,7 @@ public class JwtUtils {
                 .getPayload().getSubject();
     }
 
-    private static Key key() {
+    private Key key() {
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
     }
 
@@ -72,4 +71,3 @@ public class JwtUtils {
         return false;
     }
 }
-
