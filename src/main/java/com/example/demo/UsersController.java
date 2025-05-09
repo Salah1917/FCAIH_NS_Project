@@ -13,15 +13,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 @RestController
 public class UsersController {
 
@@ -30,21 +28,20 @@ public class UsersController {
     @Autowired
     private AuthenticationManager authenticationManager;
 
-    @GetMapping("/hello")//all users can access
-    public String normalEndpoint()
-    {
+    @GetMapping("/hello")
+    public String normalEndpoint() {
         return "hello";
     }
-    @PreAuthorize("hasRole('USER')")//only user can access
+
+    @PreAuthorize("hasRole('USER')")
     @GetMapping("/user")
-    public String userEndpoint()
-    {
+    public String userEndpoint() {
         return "hello, user";
     }
-    @PreAuthorize("hasRole('ADMIN')")//only admin can access
+
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/admin")
-    public String adminEndpoint()
-    {
+    public String adminEndpoint() {
         return "hello, admin";
     }
 
@@ -52,13 +49,13 @@ public class UsersController {
     public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
         Authentication authentication;
         try {
-            authentication = authenticationManager
-                    .authenticate(new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
-        } catch (AuthenticationException exception) {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
+        } catch (Exception e) {
             Map<String, Object> map = new HashMap<>();
             map.put("message", "Bad credentials");
             map.put("status", false);
-            return new ResponseEntity<Object>(map, HttpStatus.NOT_FOUND);
+            return new ResponseEntity<>(map, HttpStatus.NOT_FOUND);
         }
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -66,13 +63,33 @@ public class UsersController {
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
         String jwtToken = jwtUtils.generateTokenFromUsername(userDetails);
+        String refreshToken = jwtUtils.generateRefreshTokenFromUsername(userDetails);
 
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(item -> item.getAuthority())
                 .collect(Collectors.toList());
 
         LoginResponse response = new LoginResponse(userDetails.getUsername(), roles, jwtToken);
+        response.setRefreshToken(refreshToken);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refreshToken(@RequestHeader("Authorization") String refreshTokenHeader) {
+        String refreshToken = refreshTokenHeader.substring(7); // Remove Bearer prefix
+        if (jwtUtils.validateRefreshToken(refreshToken)) {
+            String username = jwtUtils.getUserNameFromJwtToken(refreshToken);
+            UserDetails userDetails = (UserDetails) authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, null));
+
+            String newAccessToken = jwtUtils.generateTokenFromUsername(userDetails);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("accessToken", newAccessToken);
+
+            return ResponseEntity.ok(response);
+        } else {
+            return new ResponseEntity<>("Invalid refresh token", HttpStatus.UNAUTHORIZED);
+        }
     }
 }

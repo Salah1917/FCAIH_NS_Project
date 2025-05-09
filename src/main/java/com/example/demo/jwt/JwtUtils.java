@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.security.Key;
 import java.util.Date;
+import java.util.UUID;
 
 @Component
 public class JwtUtils {
@@ -24,21 +25,35 @@ public class JwtUtils {
     @Value("${spring.app.jwtExpirationMs}")
     private int jwtExpirationMs;
 
+    @Value("${spring.app.refreshTokenExpirationMs}")
+    private int refreshTokenExpirationMs;
+
     public String getJwtFromHeader(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
-        logger.debug("Authorization Header: {}", bearerToken);
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7); // Remove Bearer prefix
+            return bearerToken.substring(7);
         }
         return null;
     }
 
     public String generateTokenFromUsername(UserDetails userDetails) {
-        String username = userDetails.getUsername();
         return Jwts.builder()
-                .subject(username)
+                .subject(userDetails.getUsername())
+                .claim("type", "access")
+                .claim("id", UUID.randomUUID().toString()) // ensures uniqueness
                 .issuedAt(new Date())
-                .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
+                .expiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
+                .signWith(key())
+                .compact();
+    }
+
+    public String generateRefreshTokenFromUsername(UserDetails userDetails) {
+        return Jwts.builder()
+                .subject(userDetails.getUsername())
+                .claim("type", "refresh")
+                .claim("id", UUID.randomUUID().toString()) // ensures uniqueness
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + refreshTokenExpirationMs))
                 .signWith(key())
                 .compact();
     }
@@ -55,18 +70,25 @@ public class JwtUtils {
     }
 
     public boolean validateJwtToken(String authToken) {
+        return validateToken(authToken, "JWT");
+    }
+
+    public boolean validateRefreshToken(String refreshToken) {
+        return validateToken(refreshToken, "Refresh Token");
+    }
+
+    private boolean validateToken(String token, String tokenType) {
         try {
-            System.out.println("Validate");
-            Jwts.parser().verifyWith((SecretKey) key()).build().parseSignedClaims(authToken);
+            Jwts.parser().verifyWith((SecretKey) key()).build().parseSignedClaims(token);
             return true;
         } catch (MalformedJwtException e) {
-            logger.error("Invalid JWT token: {}", e.getMessage());
+            logger.error("Invalid {}: {}", tokenType, e.getMessage());
         } catch (ExpiredJwtException e) {
-            logger.error("JWT token is expired: {}", e.getMessage());
+            logger.error("{} is expired: {}", tokenType, e.getMessage());
         } catch (UnsupportedJwtException e) {
-            logger.error("JWT token is unsupported: {}", e.getMessage());
+            logger.error("{} is unsupported: {}", tokenType, e.getMessage());
         } catch (IllegalArgumentException e) {
-            logger.error("JWT claims string is empty: {}", e.getMessage());
+            logger.error("{} claims string is empty: {}", tokenType, e.getMessage());
         }
         return false;
     }

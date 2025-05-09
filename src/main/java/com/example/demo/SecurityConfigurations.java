@@ -2,6 +2,7 @@ package com.example.demo;
 
 import com.example.demo.jwt.AuthEntryPointJwt;
 import com.example.demo.jwt.AuthTokenFilter;
+import io.jsonwebtoken.io.Decoders;
 import org.hibernate.dialect.Database;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
@@ -27,6 +28,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import javax.sql.DataSource;
 
+import java.util.Arrays;
+import java.util.Base64;
+
 import static org.springframework.security.config.Customizer.withDefaults;
 import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
@@ -35,9 +39,8 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 @EnableMethodSecurity
 public class SecurityConfigurations {
 
-
     @Autowired
-    DataSource dataSource; //Spring takes care of it
+    private DataSource dataSource;
 
     @Autowired
     private AuthEntryPointJwt unauthorizedHandler;
@@ -46,22 +49,20 @@ public class SecurityConfigurations {
     public AuthTokenFilter authenticationJwtTokenFilter() {
         return new AuthTokenFilter();
     }
+
     @Bean
-    SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(autherizeRequests ->
-                autherizeRequests.requestMatchers("/h2-console/**").permitAll() //permit database access
-                        .requestMatchers("/signin").permitAll() //let them pass the jwt will authenticate
-                        .anyRequest().authenticated()); //authenticate all access
-        http.sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); //make the forms stateless
-        //http.formLogin(withDefaults()); // to get form auth (inbuilt bootstrap template)
+                autherizeRequests.requestMatchers("/h2-console/**").permitAll()
+                        .requestMatchers("/signin", "/refresh-token").permitAll()
+                        .anyRequest().authenticated());
+        http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         http.httpBasic(withDefaults()); //to get normal browser auth
         http.headers(headers ->
                 headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)); // to view the frames(enable them)
         http.csrf(AbstractHttpConfigurer::disable);//to view h2 database
         http.addFilterBefore(authenticationJwtTokenFilter(),
                 UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 
@@ -70,34 +71,35 @@ public class SecurityConfigurations {
         return new JdbcUserDetailsManager(dataSource);
     }
 
-
     @Bean
     public CommandLineRunner initData(UserDetailsService userDetailsService) {
         return args -> {
             JdbcUserDetailsManager manager = (JdbcUserDetailsManager) userDetailsService;
 
-            //adding two users: admin and user
-            UserDetails user1 = User.withUsername("user1")
+            UserDetails user1 = User.withUsername(Base64.getEncoder().encodeToString("user1".getBytes()))
                     .password(passwordEncoder().encode("password1"))
                     .roles("USER")
                     .build();
+
+            UserDetails user2 = User.withUsername(new String(Decoders.BASE64.decode("dXNlcjI=")))
+                    .password(passwordEncoder().encode("password2"))
+                    .roles("USER")
+                    .build();
+
             UserDetails admin = User.withUsername("admin")
                     .password(passwordEncoder().encode("password2"))
                     .roles("ADMIN")
                     .build();
 
-            //creating the users in real time and adding them to h2 database
             JdbcUserDetailsManager userDetailsManager = new JdbcUserDetailsManager(dataSource);
             userDetailsManager.createUser(user1);
+            userDetailsManager.createUser(user2);
             userDetailsManager.createUser(admin);
-
         };
     }
 
-
-
-    @Bean //encode the users' passwords
-    public PasswordEncoder passwordEncoder(){
+    @Bean
+    public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 

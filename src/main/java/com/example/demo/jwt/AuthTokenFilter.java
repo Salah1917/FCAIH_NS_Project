@@ -15,12 +15,13 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+
 import java.io.IOException;
 
 @Component
 public class AuthTokenFilter extends OncePerRequestFilter {
     @Autowired
-    private com.example.demo.jwt.JwtUtils jwtUtils;
+    private JwtUtils jwtUtils;
 
     @Autowired
     private UserDetailsService userDetailsService;
@@ -61,4 +62,3 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         return jwt;
     }
 }
-
